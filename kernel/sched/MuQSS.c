@@ -742,6 +742,11 @@ static inline int ms_longest_deadline_diff(void)
 	return NS_TO_MS(longest_deadline_diff());
 }
 
+static inline int rq_load(struct rq *rq)
+{
+	return rq->sl->entries + !rq_idle(rq);
+}
+
 /*
  * Update the load average for feeding into cpu frequency governors. Use a
  * rough estimate of a rolling average with ~ time constant of 32ms.
@@ -752,7 +757,7 @@ static void update_load_avg(struct rq *rq)
 	/* rq clock can go backwards so skip update if that happens */
 	if (likely(rq->clock > rq->load_update)) {
 		unsigned long us_interval = (rq->clock - rq->load_update) >> 10;
-		long load, curload = rq->sl->entries + !rq_idle(rq);
+		long load, curload = rq_load(rq);
 
 		load = rq->load_avg - (rq->load_avg * us_interval * 5 / 262144);
 		if (unlikely(load < 0))
@@ -1508,7 +1513,7 @@ static inline bool online_cpus(struct task_struct *p)
 
 static void try_preempt(struct task_struct *p, struct rq *this_rq)
 {
-	int i, this_entries = this_rq->sl->entries;
+	int i, this_entries = rq_load(this_rq);
 	cpumask_t tmp;
 
 	if (suitable_idle_cpus(p) && resched_best_idle(p))
@@ -1526,7 +1531,7 @@ static void try_preempt(struct task_struct *p, struct rq *this_rq)
 		if (!cpumask_test_cpu(rq->cpu, &tmp))
 			continue;
 
-		if (!sched_interactive && rq != this_rq && rq->sl->entries <= this_entries)
+		if (!sched_interactive && rq != this_rq && rq_load(rq) <= this_entries)
 			continue;
 		if (smt_schedule(p, rq) && can_preempt(p, rq->rq_prio, rq->rq_deadline)) {
 			resched_curr(rq);
@@ -1711,7 +1716,7 @@ static inline int select_best_cpu(struct task_struct *p)
 			continue;
 		if (other_rq != rq && needs_other_cpu(p, other_rq->cpu))
 			continue;
-		entries = other_rq->sl->entries;
+		entries = rq_load(other_rq);
 		if (entries >= idlest)
 			continue;
 		idlest = entries;
@@ -2435,7 +2440,7 @@ bool single_task_running(void)
 {
 	struct rq *rq = cpu_rq(smp_processor_id());
 
-	if (!rq->sl->entries && !rq_idle(rq))
+	if (rq_load(rq) == 1)
 		return true;
 	else
 		return false;
@@ -2477,7 +2482,7 @@ void get_iowait_load(unsigned long *nr_waiters, unsigned long *load)
 	struct rq *rq = this_rq();
 
 	*nr_waiters = atomic_read(&rq->nr_iowait);
-	*load = rq->sl->entries;
+	*load = rq_load(rq);
 }
 
 /* Variables and functions for calc_load */
