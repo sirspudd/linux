@@ -175,10 +175,17 @@ static inline int timeslice(void)
  * variables and a cpu bitmap set atomically.
  */
 struct global_rq {
-	atomic_t nr_running;
-	atomic_t nr_uninterruptible;
-	atomic64_t nr_switches;
-	atomic_t qnr; /* queued not running */
+#ifdef CONFIG_SMP
+	atomic_t nr_running ____cacheline_aligned_in_smp;
+	atomic_t nr_uninterruptible ____cacheline_aligned_in_smp;
+	atomic64_t nr_switches ____cacheline_aligned_in_smp;
+	atomic_t qnr ____cacheline_aligned_in_smp; /* queued not running */
+#else
+	atomic_t nr_running ____cacheline_aligned;
+	atomic_t nr_uninterruptible ____cacheline_aligned;
+	atomic64_t nr_switches ____cacheline_aligned;
+	atomic_t qnr ____cacheline_aligned; /* queued not running */
+#endif
 #ifdef CONFIG_SMP
 	cpumask_t cpu_idle_map;
 #endif
@@ -217,7 +224,11 @@ static struct root_domain def_root_domain;
 #endif /* CONFIG_SMP */
 
 /* There can be only one */
-static struct global_rq grq;
+#ifdef CONFIG_SMP
+static struct global_rq grq ____cacheline_aligned_in_smp;
+#else
+static struct global_rq grq ____cacheline_aligned;
+#endif
 
 static DEFINE_MUTEX(sched_hotcpu_mutex);
 
