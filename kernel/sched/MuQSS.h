@@ -104,6 +104,11 @@ struct rq {
 	unsigned int ttwu_count;
 	unsigned int ttwu_local;
 #endif /* CONFIG_SCHEDSTATS */
+
+#ifdef CONFIG_SMP
+	struct llist_head wake_list;
+#endif
+
 #ifdef CONFIG_CPU_IDLE
 	/* Must be inspected within a rcu lock section */
 	struct cpuidle_state *idle_state;
@@ -208,7 +213,7 @@ static inline void unregister_sched_domain_sysctl(void)
 }
 #endif
 
-static inline void sched_ttwu_pending(void) { }
+extern void sched_ttwu_pending(void);
 
 #ifdef CONFIG_SMP
 
