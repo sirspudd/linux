@@ -822,11 +822,6 @@ static inline bool deadline_before(u64 deadline, u64 time)
 	return (deadline < time);
 }
 
-static inline bool deadline_after(u64 deadline, u64 time)
-{
-	return (deadline > time);
-}
-
 /*
  * Deadline is "now" in niffies + (offset by priority). Setting the deadline
  * is the key to everything. It distributes cpu fairly amongst tasks of the
