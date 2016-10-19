@@ -1029,7 +1029,7 @@ static inline int queued_notrunning(void)
 /* Entered with rq locked */
 static inline void resched_if_idle(struct rq *rq)
 {
-	if (rq_idle(rq) && rq->online)
+	if (rq_idle(rq))
 		resched_task(rq->curr);
 }
 
@@ -1943,8 +1943,9 @@ static int valid_task_cpu(struct task_struct *p)
 		cpumask_and(&valid_mask, tsk_cpus_allowed(p), cpu_active_mask);
 
 	if (unlikely(!cpumask_weight(&valid_mask))) {
+		/* Hotplug boot threads do this before the CPU is up */
 		WARN_ON(sched_smp_initialized);
-		return smp_processor_id();
+		return cpumask_any(tsk_cpus_allowed(p));
 	}
 	return cpumask_any(&valid_mask);
 }
