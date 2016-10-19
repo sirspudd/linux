@@ -213,12 +213,11 @@ static inline void unregister_sched_domain_sysctl(void)
 }
 #endif
 
-extern void sched_ttwu_pending(void);
-
 #ifdef CONFIG_SMP
-
+extern void sched_ttwu_pending(void);
 extern void set_cpus_allowed_common(struct task_struct *p, const struct cpumask *new_mask);
-
+#else
+static inline void sched_ttwu_pending(void) { }
 #endif
 
 #ifdef CONFIG_CPU_IDLE
