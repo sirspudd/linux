@@ -5651,7 +5651,7 @@ void set_cpus_allowed_common(struct task_struct *p, const struct cpumask *new_ma
 	p->nr_cpus_allowed = cpumask_weight(new_mask);
 }
 
-static void __do_set_cpus_allowed(struct task_struct *p, const struct cpumask *new_mask)
+void do_set_cpus_allowed(struct task_struct *p, const struct cpumask *new_mask)
 {
 	struct rq *rq = task_rq(p);
 
@@ -5666,21 +5666,6 @@ static void __do_set_cpus_allowed(struct task_struct *p, const struct cpumask *n
 		 */
 		lockdep_assert_held(&rq->lock);
 	}
-}
-
-void do_set_cpus_allowed(struct task_struct *p, const struct cpumask *new_mask)
-{
-	__do_set_cpus_allowed(p, new_mask);
-	if (needs_other_cpu(p, task_cpu(p))) {
-		set_task_cpu(p, valid_task_cpu(p));
-		resched_task(p);
-	}
-}
-
-static void _do_set_cpus_allowed(struct task_struct *p, const struct cpumask *new_mask)
-{
-	__do_set_cpus_allowed(p, new_mask);
-	/* __set_cpus_allowed_ptr will handle the reschedule in this variant */
 	if (needs_other_cpu(p, task_cpu(p)))
 		set_task_cpu(p, valid_task_cpu(p));
 }
@@ -5938,7 +5923,7 @@ static int __set_cpus_allowed_ptr(struct task_struct *p,
 
 	queued = task_queued(p);
 
-	_do_set_cpus_allowed(p, new_mask);
+	do_set_cpus_allowed(p, new_mask);
 
 	if (p->flags & PF_KTHREAD) {
 		/*
