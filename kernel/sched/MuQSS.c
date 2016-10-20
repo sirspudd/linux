@@ -339,8 +339,6 @@ static inline void update_clocks(struct rq *rq)
 
 	update_rq_clock(rq);
 	ndiff = rq->clock - rq->old_clock;
-	if (unlikely(!ndiff))
-		return;
 	rq->old_clock = rq->clock;
 	ndiff -= rq->niffies - rq->last_niffy;
 	jdiff = jiffies - rq->last_jiffy;
@@ -1382,7 +1380,7 @@ static void activate_task(struct task_struct *p, struct rq *rq)
 	if (unlikely(prof_on == SLEEP_PROFILING)) {
 		if (p->state == TASK_UNINTERRUPTIBLE)
 			profile_hits(SLEEP_PROFILING, (void *)get_wchan(p),
-				     (rq->clock_task - p->last_ran) >> 20);
+				     (rq->clock - p->last_ran) >> 20);
 	}
 
 	p->prio = effective_prio(p);
@@ -2993,7 +2991,6 @@ static void update_rq_clock_task(struct rq *rq, s64 delta)
 		delta -= steal;
 	}
 #endif
-
 	rq->clock_task += delta;
 }
 
@@ -3211,7 +3208,7 @@ static void pc_user_time(struct rq *rq, struct task_struct *p,
 static void
 update_cpu_clock_tick(struct rq *rq, struct task_struct *p)
 {
-	long account_ns = rq->clock_task - p->last_ran;
+	long account_ns = rq->clock - p->last_ran;
 	struct task_struct *idle = rq->idle;
 	unsigned long account_pc;
 
@@ -3235,14 +3232,13 @@ update_cpu_clock_tick(struct rq *rq, struct task_struct *p)
 ts_account:
 	/* time_slice accounting is done in usecs to avoid overflow on 32bit */
 	if (p->policy != SCHED_FIFO && p != idle) {
-		s64 time_diff = rq->clock - rq->timekeep_clock;
+		s64 time_diff = rq->clock - p->last_ran;
 
 		niffy_diff(&time_diff, 1);
 		p->time_slice -= NS_TO_US(time_diff);
 	}
 
-	p->last_ran = rq->clock_task;
-	rq->timekeep_clock = rq->clock;
+	p->last_ran = rq->clock;
 }
 
 /*
@@ -3253,7 +3249,7 @@ ts_account:
 static void
 update_cpu_clock_switch(struct rq *rq, struct task_struct *p)
 {
-	long account_ns = rq->clock_task - p->last_ran;
+	long account_ns = rq->clock - p->last_ran;
 	struct task_struct *idle = rq->idle;
 	unsigned long account_pc;
 
@@ -3272,14 +3268,13 @@ update_cpu_clock_switch(struct rq *rq, struct task_struct *p)
 ts_account:
 	/* time_slice accounting is done in usecs to avoid overflow on 32bit */
 	if (p->policy != SCHED_FIFO && p != idle) {
-		s64 time_diff = rq->clock - rq->timekeep_clock;
+		s64 time_diff = rq->clock - p->last_ran;
 
 		niffy_diff(&time_diff, 1);
 		p->time_slice -= NS_TO_US(time_diff);
 	}
 
-	p->last_ran = rq->clock_task;
-	rq->timekeep_clock = rq->clock;
+	p->last_ran = rq->clock;
 }
 
 /*
@@ -3299,7 +3294,7 @@ static inline u64 do_task_delta_exec(struct task_struct *p, struct rq *rq)
 	 */
 	if (p == rq->curr && task_on_rq_queued(p)) {
 		update_rq_clock(rq);
-		ns = rq->clock_task - p->last_ran;
+		ns = rq->clock - p->last_ran;
 		if (unlikely((s64)ns < 0))
 			ns = 0;
 	}
@@ -3847,7 +3842,7 @@ static inline void schedule_debug(struct task_struct *prev)
 static inline void set_rq_task(struct rq *rq, struct task_struct *p)
 {
 	rq->rq_deadline = p->deadline;
-	p->last_ran = rq->clock_task;
+	p->last_ran = rq->clock;
 	rq->rq_prio = p->prio;
 #ifdef CONFIG_SMT_NICE
 	rq->rq_mm = p->mm;
@@ -5687,7 +5682,7 @@ void init_idle(struct task_struct *idle, int cpu)
 
 	raw_spin_lock_irqsave(&idle->pi_lock, flags);
 	raw_spin_lock(&rq->lock);
-	idle->last_ran = rq->clock_task;
+	idle->last_ran = rq->clock;
 	idle->state = TASK_RUNNING;
 	/* Setting prio to illegal value shouldn't matter when never queued */
 	idle->prio = PRIO_LIMIT;
@@ -7727,7 +7722,7 @@ void __init sched_init(void)
 		skiplist_init(&rq->node);
 		rq->sl = new_skiplist(&rq->node);
 		raw_spin_lock_init(&rq->lock);
-		rq->niffies = 0;
+		rq->clock = rq->old_clock = rq->last_niffy = rq->niffies = 0;
 		rq->last_jiffy = jiffies;
 		rq->user_pc = rq->nice_pc = rq->softirq_pc = rq->system_pc =
 			      rq->iowait_pc = rq->idle_pc = 0;
