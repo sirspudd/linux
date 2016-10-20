@@ -31,6 +31,7 @@ struct rq {
 	unsigned long last_jiffy; /* Last jiffy this RQ updated rq clock */
 	u64 niffies; /* Last time this RQ updated rq clock */
 	u64 last_niffy; /* Last niffies as updated by local clock */
+	u64 last_jiffy_niffies; /* Niffies @ last_jiffy */
 
 	u64 load_update; /* When we last updated load */
 	unsigned long load_avg; /* Rolling load average */

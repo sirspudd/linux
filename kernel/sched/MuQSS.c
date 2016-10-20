@@ -263,29 +263,6 @@ int __weak arch_sd_sibling_asym_packing(void)
 struct rq *uprq;
 #endif /* CONFIG_SMP */
 
-/*
- * Sanity check should sched_clock return bogus values. We make sure it does
- * not appear to go backwards, and use jiffies to determine the maximum and
- * minimum it could possibly have increased, and round down to the nearest
- * jiffy when it falls outside this.
- */
-static inline void niffy_diff(s64 *niff_diff, int jiff_diff)
-{
-	unsigned long min_diff, max_diff;
-
-	if (jiff_diff > 1)
-		min_diff = JIFFIES_TO_NS(jiff_diff - 1);
-	else
-		min_diff = 1;
-	/*  Round up to the nearest tick for maximum */
-	max_diff = JIFFIES_TO_NS(jiff_diff + 1);
-
-	if (unlikely(*niff_diff < min_diff))
-		*niff_diff = min_diff;
-	else if (unlikely(*niff_diff > max_diff))
-		*niff_diff = max_diff;
-}
-
 #ifdef CONFIG_SMP
 static inline int cpu_of(struct rq *rq)
 {
@@ -336,18 +313,26 @@ static inline void update_rq_clock(struct rq *rq)
  */
 static inline void update_clocks(struct rq *rq)
 {
-	s64 ndiff;
+	s64 ndiff, minndiff;
 	long jdiff;
 
 	update_rq_clock(rq);
 	ndiff = rq->clock - rq->old_clock;
 	rq->old_clock = rq->clock;
-	ndiff -= rq->niffies - rq->last_niffy;
 	jdiff = jiffies - rq->last_jiffy;
-	niffy_diff(&ndiff, jdiff);
-	rq->last_jiffy += jdiff;
+
+	/* Subtract any niffies added by balancing with other rqs */
+	ndiff -= rq->niffies - rq->last_niffy;
+	minndiff = JIFFIES_TO_NS(jdiff) - rq->niffies + rq->last_jiffy_niffies;
+	if (minndiff < 0)
+		minndiff = 0;
+	ndiff = max(ndiff, minndiff);
 	rq->niffies += ndiff;
 	rq->last_niffy = rq->niffies;
+	if (jdiff) {
+		rq->last_jiffy += jdiff;
+		rq->last_jiffy_niffies = rq->niffies;
+	}
 }
 
 static inline int task_current(struct rq *rq, struct task_struct *p)
@@ -3210,11 +3195,11 @@ static void pc_user_time(struct rq *rq, struct task_struct *p,
 static void
 update_cpu_clock_tick(struct rq *rq, struct task_struct *p)
 {
-	long account_ns = rq->niffies - p->last_ran;
+	s64 account_ns = rq->niffies - p->last_ran;
 	struct task_struct *idle = rq->idle;
 	unsigned long account_pc;
 
-	if (unlikely(account_ns < 0) || steal_account_process_tick())
+	if (steal_account_process_tick())
 		goto ts_account;
 
 	account_pc = NS_TO_PC(account_ns);
@@ -3222,10 +3207,10 @@ update_cpu_clock_tick(struct rq *rq, struct task_struct *p)
 	/* Accurate tick timekeeping */
 	if (user_mode(get_irq_regs()))
 		pc_user_time(rq, p, account_pc, account_ns);
-	else if (p != idle || (irq_count() != HARDIRQ_OFFSET))
+	else if (p != idle || (irq_count() != HARDIRQ_OFFSET)) {
 		pc_system_time(rq, p, HARDIRQ_OFFSET,
 			       account_pc, account_ns);
-	else
+	} else
 		pc_idle_time(rq, idle, account_pc);
 
 	if (sched_clock_irqtime)
@@ -3233,12 +3218,8 @@ update_cpu_clock_tick(struct rq *rq, struct task_struct *p)
 
 ts_account:
 	/* time_slice accounting is done in usecs to avoid overflow on 32bit */
-	if (p->policy != SCHED_FIFO && p != idle) {
-		s64 time_diff = rq->niffies - p->last_ran;
-
-		niffy_diff(&time_diff, 1);
-		p->time_slice -= NS_TO_US(time_diff);
-	}
+	if (p->policy != SCHED_FIFO && p != idle)
+		p->time_slice -= NS_TO_US(account_ns);
 
 	p->last_ran = rq->niffies;
 }
@@ -3251,32 +3232,21 @@ ts_account:
 static void
 update_cpu_clock_switch(struct rq *rq, struct task_struct *p)
 {
-	long account_ns = rq->niffies - p->last_ran;
+	s64 account_ns = rq->niffies - p->last_ran;
 	struct task_struct *idle = rq->idle;
 	unsigned long account_pc;
-
-	if (unlikely(account_ns < 0))
-		goto ts_account;
 
 	account_pc = NS_TO_PC(account_ns);
 
 	/* Accurate subtick timekeeping */
-	if (p != idle) {
+	if (p != idle)
 		pc_user_time(rq, p, account_pc, account_ns);
-	}
 	else
 		pc_idle_time(rq, idle, account_pc);
 
-ts_account:
 	/* time_slice accounting is done in usecs to avoid overflow on 32bit */
-	if (p->policy != SCHED_FIFO && p != idle) {
-		s64 time_diff = rq->niffies - p->last_ran;
-
-		niffy_diff(&time_diff, 1);
-		p->time_slice -= NS_TO_US(time_diff);
-	}
-
-	p->last_ran = rq->niffies;
+	if (p->policy != SCHED_FIFO && p != idle)
+		p->time_slice -= NS_TO_US(account_ns);
 }
 
 /*
@@ -3297,8 +3267,6 @@ static inline u64 do_task_delta_exec(struct task_struct *p, struct rq *rq)
 	if (p == rq->curr && task_on_rq_queued(p)) {
 		update_clocks(rq);
 		ns = rq->niffies - p->last_ran;
-		if (unlikely((s64)ns < 0))
-			ns = 0;
 	}
 
 	return ns;
@@ -3844,19 +3812,9 @@ static inline void schedule_debug(struct task_struct *prev)
 static inline void set_rq_task(struct rq *rq, struct task_struct *p)
 {
 	rq->rq_deadline = p->deadline;
-	p->last_ran = rq->niffies;
 	rq->rq_prio = p->prio;
 #ifdef CONFIG_SMT_NICE
 	rq->rq_mm = p->mm;
-	rq->rq_smt_bias = p->smt_bias;
-#endif
-}
-
-static void reset_rq_task(struct rq *rq, struct task_struct *p)
-{
-	rq->rq_deadline = p->deadline;
-	rq->rq_prio = p->prio;
-#ifdef CONFIG_SMT_NICE
 	rq->rq_smt_bias = p->smt_bias;
 #endif
 }
@@ -3961,6 +3919,7 @@ static void __sched notrace __schedule(bool preempt)
 	unsigned long *switch_count;
 	bool deactivate = false;
 	struct rq *rq;
+	u64 niffies;
 	int cpu;
 
 	cpu = smp_processor_id();
@@ -4038,7 +3997,13 @@ static void __sched notrace __schedule(bool preempt)
 		switch_count = &prev->nvcsw;
 	}
 
+	/*
+	 * Store the niffy value here for use by the next task's last_ran
+	 * below to avoid losing niffies due to update_clocks being called
+	 * again after this point.
+	 */
 	update_clocks(rq);
+	niffies = rq->niffies;
 	update_cpu_clock_switch(rq, prev);
 	if (rq->clock - rq->last_tick > HALF_JIFFY_NS)
 		rq->dither = 0;
@@ -4068,13 +4033,15 @@ static void __sched notrace __schedule(bool preempt)
 		}
 	}
 
+	set_rq_task(rq, next);
+	next->last_ran = niffies;
+
 	if (likely(prev != next)) {
 		/*
 		 * Don't reschedule an idle task or deactivated tasks
 		 */
 		if (prev != idle && !deactivate)
 			resched_suitable_idle(prev);
-		set_rq_task(rq, next);
 		if (next != idle)
 			check_siblings(rq);
 		else
@@ -4390,7 +4357,7 @@ void set_user_nice(struct task_struct *p, long nice)
 		if (new_static < old_static)
 			try_preempt(p, rq);
 	} else if (task_running(rq, p)) {
-		reset_rq_task(rq, p);
+		set_rq_task(rq, p);
 		if (old_static < new_static)
 			resched_task(p);
 	}
@@ -4537,7 +4504,7 @@ static void __setscheduler(struct task_struct *p, struct rq *rq, int policy,
 		p->prio = p->normal_prio;
 
 	if (task_running(rq, p)) {
-		reset_rq_task(rq, p);
+		set_rq_task(rq, p);
 		resched_task(p);
 	} else if (task_queued(p)) {
 		dequeue_task(rq, p, DEQUEUE_SAVE);
