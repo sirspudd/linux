@@ -39,7 +39,6 @@ struct rq {
 	int rq_smt_bias; /* Policy/nice level bias across smt siblings */
 #endif
 	/* Accurate timekeeping data */
-	u64 timekeep_clock;
 	unsigned long user_pc, nice_pc, irq_pc, softirq_pc, system_pc,
 		iowait_pc, idle_pc;
 	atomic_t nr_iowait;
