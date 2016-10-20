@@ -280,8 +280,10 @@ static inline void niffy_diff(s64 *niff_diff, int jiff_diff)
 	/*  Round up to the nearest tick for maximum */
 	max_diff = JIFFIES_TO_NS(jiff_diff + 1);
 
-	if (unlikely(*niff_diff < min_diff || *niff_diff > max_diff))
+	if (unlikely(*niff_diff < min_diff))
 		*niff_diff = min_diff;
+	else if (unlikely(*niff_diff > max_diff))
+		*niff_diff = max_diff;
 }
 
 #ifdef CONFIG_SMP
