@@ -40,8 +40,8 @@ struct rq {
 	int rq_smt_bias; /* Policy/nice level bias across smt siblings */
 #endif
 	/* Accurate timekeeping data */
-	unsigned long user_pc, nice_pc, irq_pc, softirq_pc, system_pc,
-		iowait_pc, idle_pc;
+	unsigned long user_ns, nice_ns, irq_ns, softirq_ns, system_ns,
+		iowait_ns, idle_ns;
 	atomic_t nr_iowait;
 
 	skiplist_node node;
