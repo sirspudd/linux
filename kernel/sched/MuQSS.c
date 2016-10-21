@@ -820,7 +820,7 @@ static inline int ms_longest_deadline_diff(void)
 
 static inline int rq_load(struct rq *rq)
 {
-	return rq->sl->entries + !rq_idle(rq);
+	return rq->nr_running;
 }
 
 static inline bool rq_local(struct rq *rq);
