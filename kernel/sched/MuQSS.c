@@ -162,8 +162,6 @@ int sched_iso_cpu __read_mostly = 70;
  */
 static int prio_ratios[NICE_WIDTH] __read_mostly;
 
-static cpumask_t cpu_idle_map;
-
 /*
  * The quota handed out to tasks of all priority levels when refilling their
  * time_slice.
@@ -174,6 +172,8 @@ static inline int timeslice(void)
 }
 
 #ifdef CONFIG_SMP
+static cpumask_t cpu_idle_map ____cacheline_aligned_in_smp;
+
 /*
  * We add the notion of a root-domain which will be used to define per-domain
  * variables. Each exclusive cpuset essentially defines an island domain by
