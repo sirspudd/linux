@@ -3622,8 +3622,6 @@ static inline void check_deadline(struct task_struct *p, struct rq *rq)
 		time_slice_expired(p, rq);
 }
 
-#define BITOP_WORD(nr)		((nr) / BITS_PER_LONG)
-
 /*
  * Task selection with skiplists is a simple matter of picking off the first
  * task in the sorted list, an O(1) operation. The lookup is amortised O(1)
@@ -3640,8 +3638,9 @@ static inline void check_deadline(struct task_struct *p, struct rq *rq)
  * runqueue or a runqueue with more tasks than the current one with a better
  * key/deadline.
  */
-static inline struct
-task_struct *earliest_deadline_task(struct rq *rq, int cpu, struct task_struct *idle)
+#ifdef CONFIG_SMP
+static inline struct task_struct
+*earliest_deadline_task(struct rq *rq, int cpu, struct task_struct *idle)
 {
 	struct task_struct *edt = idle;
 	struct rq *locked = NULL;
@@ -3719,6 +3718,19 @@ task_struct *earliest_deadline_task(struct rq *rq, int cpu, struct task_struct *
 
 	return edt;
 }
+#else /* CONFIG_SMP */
+static inline struct task_struct
+*earliest_deadline_task(struct rq *rq, int cpu, struct task_struct *idle)
+{
+	struct task_struct *edt;
+
+	if (unlikely(!rq->sl->entries))
+		return idle;
+	edt = rq->node.next[0]->value;
+	take_task(rq, cpu, edt);
+	return edt;
+}
+#endif /* CONFIG_SMP */
 
 /*
  * Print scheduling while atomic bug:
