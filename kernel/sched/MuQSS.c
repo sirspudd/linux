@@ -1933,7 +1933,7 @@ static inline int select_best_cpu(struct task_struct *p)
 		rq = other_rq;
 	}
 	if (unlikely(!rq))
-		return smp_processor_id();
+		return task_cpu(p);
 	return rq->cpu;
 }
 #else /* CONFIG_SMP */
