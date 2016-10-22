@@ -4012,8 +4012,10 @@ static void __sched notrace __schedule(bool preempt)
 
 		trace_sched_switch(preempt, prev, next);
 		rq = context_switch(rq, prev, next); /* unlocks the rq */
-	} else
+	} else {
+		check_siblings(rq);
 		rq_unlock_irq(rq);
+	}
 }
 
 static inline void sched_submit_work(struct task_struct *tsk)
