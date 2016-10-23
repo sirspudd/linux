@@ -3529,7 +3529,7 @@ void scheduler_tick(void)
 	struct rq *rq = cpu_rq(cpu);
 
 	sched_clock_tick();
-	update_rq_clock(rq);
+	update_clocks(rq);
 	update_load_avg(rq);
 	update_cpu_clock_tick(rq, rq->curr);
 	if (!rq_idle(rq))
