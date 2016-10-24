@@ -10,7 +10,7 @@ NAME = Psychotic Stoned Sheep
 # Comments in this file are targeted only to the developer, do not
 # expect to learn how to build the kernel reading this file.
 
-CKVERSION = -ck3
+CKVERSION = -ck4
 CKNAME = MuQSS Powered
 EXTRAVERSION := $(EXTRAVERSION)$(CKVERSION)
 
