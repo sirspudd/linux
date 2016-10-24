@@ -135,7 +135,7 @@
 
 void print_scheduler_version(void)
 {
-	printk(KERN_INFO "MuQSS CPU scheduler v0.115 by Con Kolivas.\n");
+	printk(KERN_INFO "MuQSS CPU scheduler v0.116 by Con Kolivas.\n");
 }
 
 /*
