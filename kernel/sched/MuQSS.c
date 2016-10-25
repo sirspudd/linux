@@ -5241,6 +5241,7 @@ SYSCALL_DEFINE0(sched_yield)
 
 	p = current;
 	rq = this_rq_lock();
+	time_slice_expired(p, rq);
 	schedstat_inc(task_rq(p), yld_count);
 
 	/*
