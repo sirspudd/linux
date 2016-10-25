@@ -1416,7 +1416,7 @@ void set_task_cpu(struct task_struct *p, unsigned int cpu)
 	WARN_ON_ONCE(debug_locks && !(lockdep_is_held(&p->pi_lock) ||
 				      lockdep_is_held(&task_rq(p)->lock)));
 #endif
-	if (p->wake_cpu == cpu)
+	if (task_cpu(p) == cpu)
 		return;
 	trace_sched_migrate_task(p, cpu);
 	perf_event_task_migrate(p);
