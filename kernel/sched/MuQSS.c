@@ -3608,6 +3608,60 @@ out_resched:
 	rq_unlock(rq);
 }
 
+#ifdef CONFIG_NO_HZ_FULL
+/*
+ * We can stop the timer tick any time highres timers are active since
+ * we rely entirely on highres timeouts for task expiry rescheduling.
+ */
+static void sched_stop_tick(struct rq *rq, int cpu)
+{
+	if (!hrexpiry_enabled(rq))
+		return;
+	if (!tick_nohz_full_enabled())
+		return;
+	if (!tick_nohz_full_cpu(cpu))
+		return;
+	tick_nohz_dep_clear_cpu(cpu, TICK_DEP_BIT_SCHED);
+}
+
+static void sched_start_tick(struct rq *rq, int cpu)
+{
+	tick_nohz_dep_set_cpu(cpu, TICK_DEP_BIT_SCHED);
+}
+
+/**
+ * scheduler_tick_max_deferment
+ *
+ * Keep at least one tick per second when a single
+ * active task is running.
+ *
+ * This makes sure that uptime continues to move forward, even
+ * with a very low granularity.
+ *
+ * Return: Maximum deferment in nanoseconds.
+ */
+u64 scheduler_tick_max_deferment(void)
+{
+	struct rq *rq = this_rq();
+	unsigned long next, now = READ_ONCE(jiffies);
+
+	next = rq->last_jiffy + HZ;
+
+	if (time_before_eq(next, now))
+		return 0;
+
+	return jiffies_to_nsecs(next - now);
+}
+#else
+static inline void sched_stop_tick(struct rq *rq, int cpu)
+{
+}
+
+static inline void sched_start_tick(struct rq *rq, int cpu)
+{
+}
+#endif
+
 /*
  * This function gets called by the timer code, with HZ frequency.
  * We call it with interrupts disabled.
@@ -3628,6 +3682,7 @@ void scheduler_tick(void)
 	rq->last_scheduler_tick = rq->last_jiffy;
 	rq->last_tick = rq->clock;
 	perf_event_task_tick();
+	sched_stop_tick(rq, cpu);
 }
 
 #if defined(CONFIG_PREEMPT) && (defined(CONFIG_DEBUG_PREEMPT) || \
