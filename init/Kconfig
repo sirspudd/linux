@@ -30,6 +30,7 @@ menu "General setup"
 
 config SCHED_MUQSS
 	bool "MuQSS cpu scheduler"
+	select HIGH_RES_TIMERS
 	---help---
 	  The Multiple Queue Skiplist Scheduler for excellent interactivity and
 	  responsiveness on the desktop and highly scalable deterministic
@@ -374,7 +375,6 @@ config VIRT_CPU_ACCOUNTING_GEN
 	bool "Full dynticks CPU time accounting"
 	depends on HAVE_CONTEXT_TRACKING
 	depends on HAVE_VIRT_CPU_ACCOUNTING_GEN
-	depends on !SCHED_MUQSS
 	select VIRT_CPU_ACCOUNTING
 	select CONTEXT_TRACKING
 	help
