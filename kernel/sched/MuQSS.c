@@ -184,13 +184,11 @@ struct global_rq {
 	atomic_t nr_running ____cacheline_aligned_in_smp;
 	atomic_t nr_uninterruptible ____cacheline_aligned_in_smp;
 	atomic64_t nr_switches ____cacheline_aligned_in_smp;
-	atomic_t qnr ____cacheline_aligned_in_smp; /* queued not running */
 	cpumask_t cpu_idle_map ____cacheline_aligned_in_smp;
 #else
 	atomic_t nr_running ____cacheline_aligned;
 	atomic_t nr_uninterruptible ____cacheline_aligned;
 	atomic64_t nr_switches ____cacheline_aligned;
-	atomic_t qnr ____cacheline_aligned; /* queued not running */
 #endif
 };
 
@@ -998,26 +996,6 @@ static inline int task_timeslice(struct task_struct *p)
 	return (rr_interval * task_prio_ratio(p) / 128);
 }
 
-/*
- * qnr is the "queued but not running" count which is the total number of
- * tasks on the global runqueue list waiting for cpu time but not actually
- * currently running on a cpu.
- */
-static inline void inc_qnr(void)
-{
-	atomic_inc(&grq.qnr);
-}
-
-static inline void dec_qnr(void)
-{
-	atomic_dec(&grq.qnr);
-}
-
-static inline int queued_notrunning(void)
-{
-	return atomic_read(&grq.qnr);
-}
-
 #ifdef CONFIG_SMP
 /* Entered with rq locked */
 static inline void resched_if_idle(struct rq *rq)
@@ -1385,7 +1363,6 @@ static void activate_task(struct task_struct *p, struct rq *rq)
 	enqueue_task(rq, p, 0);
 	p->on_rq = TASK_ON_RQ_QUEUED;
 	atomic_inc(&grq.nr_running);
-	inc_qnr();
 }
 
 /*
@@ -1470,7 +1447,6 @@ static inline void take_task(struct rq *rq, int cpu, struct task_struct *p)
 		sched_info_queued(rq, p);
 	}
 	set_task_cpu(p, cpu);
-	dec_qnr();
 }
 
 /*
@@ -1483,7 +1459,6 @@ static inline void return_task(struct task_struct *p, struct rq *rq,
 	if (deactivate)
 		deactivate_task(p, rq);
 	else {
-		inc_qnr();
 #ifdef CONFIG_SMP
 		/*
 		 * set_task_cpu was called on the running task that doesn't
@@ -4012,9 +3987,6 @@ static void wake_smt_siblings(struct rq *this_rq)
 {
 	int other_cpu;
 
-	if (!queued_notrunning())
-		return;
-
 	for_each_cpu(other_cpu, &this_rq->thread_mask) {
 		struct rq *rq;
 
@@ -4168,19 +4140,12 @@ static void __sched notrace __schedule(bool preempt)
 		return_task(prev, rq, cpu, deactivate);
 	}
 
-	if (unlikely(!queued_notrunning())) {
-		next = idle;
-		schedstat_inc(rq, sched_goidle);
+	next = earliest_deadline_task(rq, cpu, idle);
+	if (likely(next->prio != PRIO_LIMIT))
+		clear_cpuidle_map(cpu);
+	else {
 		set_cpuidle_map(cpu);
 		update_load_avg(rq);
-	} else {
-		next = earliest_deadline_task(rq, cpu, idle);
-		if (likely(next->prio != PRIO_LIMIT))
-			clear_cpuidle_map(cpu);
-		else {
-			set_cpuidle_map(cpu);
-			update_load_avg(rq);
-		}
 	}
 
 	set_rq_task(rq, next);
@@ -7853,7 +7818,6 @@ void __init sched_init(void)
 
 #ifdef CONFIG_SMP
 	init_defrootdomain();
-	atomic_set(&grq.qnr, 0);
 	cpumask_clear(&grq.cpu_idle_map);
 #else
 	uprq = &per_cpu(runqueues, 0);
