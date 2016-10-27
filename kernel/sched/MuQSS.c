@@ -866,10 +866,9 @@ static inline bool rq_local(struct rq *rq);
  */
 static void update_load_avg(struct rq *rq)
 {
-	/* rq clock can go backwards so skip update if that happens */
-	if (likely(rq->clock > rq->load_update)) {
-		unsigned long us_interval = (rq->clock - rq->load_update) >> 10;
-		long load, curload = rq_load(rq);
+	if (likely(rq->niffies > rq->load_update)) {
+		unsigned long us_interval = NS_TO_US(rq->niffies - rq->load_update);
+		long load, curload = rq_load(rq) + atomic_read(&rq->nr_iowait);
 
 		load = rq->load_avg - (rq->load_avg * us_interval * 5 / 262144);
 		if (unlikely(load < 0))
@@ -879,7 +878,7 @@ static void update_load_avg(struct rq *rq)
 	} else
 		return;
 
-	rq->load_update = rq->clock;
+	rq->load_update = rq->niffies;
 	if (likely(rq_local(rq)))
 		cpufreq_trigger(rq->niffies, rq->load_avg);
 }
