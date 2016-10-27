@@ -3270,7 +3270,7 @@ static void sched_stop_tick(struct rq *rq, int cpu)
 	tick_nohz_dep_clear_cpu(cpu, TICK_DEP_BIT_SCHED);
 }
 
-static void sched_start_tick(struct rq *rq, int cpu)
+static inline void sched_start_tick(struct rq *rq, int cpu)
 {
 	tick_nohz_dep_set_cpu(cpu, TICK_DEP_BIT_SCHED);
 }
@@ -7265,6 +7265,7 @@ int sched_cpu_dying(unsigned int cpu)
 	}
 	bind_zero(cpu);
 	double_rq_unlock(rq, cpu_rq(0));
+	sched_start_tick(rq, cpu);
 	hrexpiry_clear(rq);
 	local_irq_restore(flags);
 
