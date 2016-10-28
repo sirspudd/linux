@@ -3119,18 +3119,21 @@ static void hrexpiry_clear(struct rq *rq)
 static enum hrtimer_restart hrexpiry(struct hrtimer *timer)
 {
 	struct rq *rq = container_of(timer, struct rq, hrexpiry_timer);
-	struct task_struct *p = rq->curr;
+	struct task_struct *p;
 
-	WARN_ON_ONCE(cpu_of(rq) != smp_processor_id());
+	/* This can happen during CPU hotplug / resume */
+	if (unlikely(cpu_of(rq) != smp_processor_id()))
+		goto out;
 
 	/*
 	 * We're doing this without the runqueue lock but this should always
 	 * be run on the local CPU. Time slice should run out in __schedule
 	 * but we set it to zero here in case niffies is slightly less.
 	 */
+	p = rq->curr;
 	p->time_slice = 0;
 	__set_tsk_resched(p);
-
+out:
 	return HRTIMER_NORESTART;
 }
 
