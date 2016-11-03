@@ -1745,34 +1745,16 @@ signed long __sched schedule_timeout(signed long timeout)
 
 	expire = timeout + jiffies;
 
-#if defined(CONFIG_SCHED_MUQSS)
-	/*
-	 * Use high resolution timers in place of regular ones whenever possible
-	 * on muqss since they are mandatory and low Hz is recommended.
-	 */
-	if (likely(hrtimer_resolution < NSEC_PER_SEC / HZ)) {
-		int delta, secs;
-		ktime_t expires;
-
-		if (!timeout) {
-			current->state = TASK_RUNNING;
-			goto out;
-		}
-		secs = timeout / HZ;
-		delta = timeout % HZ;
-		delta *= NSEC_PER_SEC / HZ;
+	if (timeout == 1 && hrtimer_resolution < NSEC_PER_SEC / HZ) {
 		/*
-		 * Round down half a tick to match what it would have been on
-		 * average with regular tick based timers.
+		 * Special case 1 as being a request for the minimum timeout
+		 * and use highres timers to timeout after 1ms to workaround
+		 * the granularity of low Hz tick timers.
 		 */
-		delta -= NSEC_PER_SEC / HZ / 2;
-		expires = ktime_set(secs, delta);
-		if (schedule_hrtimeout(&expires, HRTIMER_MODE_REL_PINNED) == -EINTR)
-			goto out_timeout;
-		timeout = 0;
-		goto out;
+		if (!schedule_min_hrtimeout())
+			return 0;
+		goto out_timeout;
 	}
-#endif
 
 	setup_timer_on_stack(&timer, process_timeout, (unsigned long)current);
 	__mod_timer(&timer, expire, false);
