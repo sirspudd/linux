@@ -1810,15 +1810,7 @@ static inline void cpufreq_trigger_update(u64 time) {}
 #define arch_scale_freq_invariant()	(false)
 #endif
 
-static inline void account_reset_rq(struct rq *rq)
+static inline bool softirq_pending(int cpu)
 {
-#ifdef CONFIG_IRQ_TIME_ACCOUNTING
-	rq->prev_irq_time = 0;
-#endif
-#ifdef CONFIG_PARAVIRT
-	rq->prev_steal_time = 0;
-#endif
-#ifdef CONFIG_PARAVIRT_TIME_ACCOUNTING
-	rq->prev_steal_time_rq = 0;
-#endif
+	return false;
 }
