@@ -3518,8 +3518,8 @@ static inline struct task_struct
 		key = other_rq->node.next[0]->key;
 		/* Reevaluate key after locking */
 		if (unlikely(key >= best_key)) {
-			if (i)
-				unlock_rq(other_rq);
+			/* This will always be when rq != other_rq */
+			unlock_rq(other_rq);
 			continue;
 		}
 
