@@ -3799,13 +3799,8 @@ static void __sched notrace __schedule(bool preempt)
 				struct task_struct *to_wakeup;
 
 				to_wakeup = wq_worker_sleeping(prev);
-				if (to_wakeup) {
-					/* This shouldn't happen, but does */
-					if (WARN_ONCE((to_wakeup == prev), "Waking up prev as worker\n"))
-						deactivate = false;
-					else
-						try_to_wake_up_local(to_wakeup);
-				}
+				if (to_wakeup)
+					try_to_wake_up_local(to_wakeup);
 			}
 		}
 		switch_count = &prev->nvcsw;
