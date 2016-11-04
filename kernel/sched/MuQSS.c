@@ -3494,6 +3494,12 @@ static inline struct task_struct
 		 * is locked so entries will always be accurate.
 		 */
 		if (!sched_interactive) {
+			/*
+			 * Don't reschedule balance across nodes unless the CPU
+			 * is idle.
+			 */
+			if (edt != idle && rq->cpu_locality[other_rq->cpu] > 3)
+				break;
 			if (entries <= best_entries)
 				continue;
 		} else if (!entries)
