@@ -5682,16 +5682,16 @@ static int __set_cpus_allowed_ptr(struct task_struct *p,
 				  const struct cpumask *new_mask, bool check)
 {
 	const struct cpumask *cpu_valid_mask = cpu_active_mask;
-	bool running_wrong = false;
+	bool queued = false, running_wrong = false, kthread;
 	struct cpumask old_mask;
-	bool queued = false;
 	unsigned long flags;
 	struct rq *rq;
 	int ret = 0;
 
 	rq = task_rq_lock(p, &flags);
 
-	if (p->flags & PF_KTHREAD) {
+	kthread = !!(p->flags & PF_KTHREAD);
+	if (kthread) {
 		/*
 		 * Kernel threads are allowed on online && !active CPUs
 		 */
@@ -5720,7 +5720,7 @@ static int __set_cpus_allowed_ptr(struct task_struct *p,
 
 	_do_set_cpus_allowed(p, new_mask);
 
-	if (p->flags & PF_KTHREAD) {
+	if (kthread) {
 		/*
 		 * For kernel threads that do indeed end up on online &&
 		 * !active we want to ensure they are strict per-cpu threads.
@@ -5738,7 +5738,7 @@ static int __set_cpus_allowed_ptr(struct task_struct *p,
 		/* Task is running on the wrong cpu now, reschedule it. */
 		if (rq == this_rq()) {
 			set_tsk_need_resched(p);
-			running_wrong = true;
+			running_wrong = kthread;
 		} else
 			resched_task(p);
 	} else {
