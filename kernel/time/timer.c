@@ -1511,17 +1511,6 @@ signed long __sched schedule_timeout(signed long timeout)
 
 	expire = timeout + jiffies;
 
-	if (timeout == 1 && hrtimer_resolution < NSEC_PER_SEC / HZ) {
-		/*
-		 * Special case 1 as being a request for the minimum timeout
-		 * and use highres timers to timeout after 1ms to workaround
-		 * the granularity of low Hz tick timers.
-		 */
-		if (!schedule_min_hrtimeout())
-			return 0;
-		goto out_timeout;
-	}
-
 	setup_timer_on_stack(&timer, process_timeout, (unsigned long)current);
 	__mod_timer(&timer, expire, false, TIMER_NOT_PINNED);
 	schedule();
@@ -1529,10 +1518,10 @@ signed long __sched schedule_timeout(signed long timeout)
 
 	/* Remove the timer from the object tracker */
 	destroy_timer_on_stack(&timer);
-out_timeout:
+
 	timeout = expire - jiffies;
 
-out:
+ out:
 	return timeout < 0 ? 0 : timeout;
 }
 EXPORT_SYMBOL(schedule_timeout);
@@ -1679,13 +1668,7 @@ void __init init_timers(void)
  */
 void msleep(unsigned int msecs)
 {
-	unsigned long timeout;
-
-	if (likely(hrtimer_resolution < NSEC_PER_SEC / HZ)) {
-		while (msecs)
-			msecs = schedule_msec_hrtimeout_uninterruptible(msecs);
-	}
-	timeout = msecs_to_jiffies(msecs) + 1;
+	unsigned long timeout = msecs_to_jiffies(msecs) + 1;
 
 	while (timeout)
 		timeout = schedule_timeout_uninterruptible(timeout);
@@ -1699,14 +1682,7 @@ EXPORT_SYMBOL(msleep);
  */
 unsigned long msleep_interruptible(unsigned int msecs)
 {
-	unsigned long timeout;
-
-	if (likely(hrtimer_resolution < NSEC_PER_SEC / HZ)) {
-		while (msecs && !signal_pending(current))
-			msecs = schedule_msec_hrtimeout_interruptible(msecs);
-		return msecs;
-	}
-	timeout = msecs_to_jiffies(msecs) + 1;
+	unsigned long timeout = msecs_to_jiffies(msecs) + 1;
 
 	while (timeout && !signal_pending(current))
 		timeout = schedule_timeout_interruptible(timeout);

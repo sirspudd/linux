@@ -289,7 +289,7 @@ static int perf_move_data(struct pthr_ctx *pctx, char __iomem *dst, char *src,
 		/* Probably should schedule every 4GB to prevent soft hang. */
 		if (((copied % SZ_4G) == 0) && !use_dma) {
 			set_current_state(TASK_INTERRUPTIBLE);
-			schedule_min_hrtimeout();
+			schedule_timeout(1);
 		}
 	}
 
