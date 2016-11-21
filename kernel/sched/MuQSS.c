@@ -3483,16 +3483,15 @@ static inline void check_deadline(struct task_struct *p, struct rq *rq)
 static inline struct task_struct
 *earliest_deadline_task(struct rq *rq, int cpu, struct task_struct *idle)
 {
+	struct rq *locked = NULL, *chosen = NULL;
 	struct task_struct *edt = idle;
-	struct rq *locked = NULL;
 	int i, best_entries = 0;
 	u64 best_key = ~0ULL;
 
 	for (i = 0; i < num_possible_cpus(); i++) {
 		struct rq *other_rq = rq_order(rq, i);
 		int entries = other_rq->sl->entries;
-		struct task_struct *p;
-		u64 key;
+		skiplist_node *next;
 
 		/*
 		 * Check for queued entres lockless first. The local runqueue
@@ -3526,35 +3525,47 @@ static inline struct task_struct
 				continue;
 			}
 		}
-		key = other_rq->node.next[0]->key;
-		/* Reevaluate key after locking */
-		if (unlikely(key >= best_key)) {
-			/* This will always be when rq != other_rq */
-			unlock_rq(other_rq);
-			continue;
-		}
 
-		p = other_rq->node.next[0]->value;
-		if (!smt_schedule(p, rq)) {
-			if (i)
-				unlock_rq(other_rq);
-			continue;
-		}
+		next = &other_rq->node;
+		/*
+		 * In interactive mode we check beyond the best entry on other
+		 * runqueues if we can't get the best for smt or affinity
+		 * reasons.
+		 */
+		while ((next = next->next[0]) != &other_rq->node) {
+			struct task_struct *p;
+			u64 key = next->key;
 
-		/* Make sure affinity is ok */
-		if (i) {
-			if (needs_other_cpu(p, cpu)) {
-				unlock_rq(other_rq);
+			/* Reevaluate key after locking */
+			if (key >= best_key)
+				break;
+
+			p = next->value;
+			if (!smt_schedule(p, rq)) {
+				if (i && !sched_interactive)
+					break;
 				continue;
 			}
-			if (locked)
-				unlock_rq(locked);
-			locked = other_rq;
-		}
 
-		best_entries = entries;
-		best_key = key;
-		edt = p;
+			/* Make sure affinity is ok */
+			if (i) {
+				if (needs_other_cpu(p, cpu)) {
+					if (sched_interactive)
+						continue;
+					break;
+				}
+				/* From this point on p is the best so far */
+				if (locked)
+					unlock_rq(locked);
+				chosen = locked = other_rq;
+			}
+			best_entries = entries;
+			best_key = key;
+			edt = p;
+			break;
+		}
+		if (i && other_rq != chosen)
+			unlock_rq(other_rq);
 	}
 
 	if (likely(edt != idle))
