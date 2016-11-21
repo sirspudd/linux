@@ -1759,6 +1759,7 @@ signed long __sched schedule_timeout(signed long timeout)
 
 	expire = timeout + jiffies;
 
+#ifdef CONFIG_HIGH_RES_TIMERS
 	if (timeout == 1 && hrtimer_resolution < NSEC_PER_SEC / HZ) {
 		/*
 		 * Special case 1 as being a request for the minimum timeout
@@ -1769,6 +1770,7 @@ signed long __sched schedule_timeout(signed long timeout)
 			return 0;
 		goto out_timeout;
 	}
+#endif
 
 	setup_timer_on_stack(&timer, process_timeout, (unsigned long)current);
 	__mod_timer(&timer, expire, false);
