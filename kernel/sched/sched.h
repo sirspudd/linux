@@ -1815,3 +1815,8 @@ static inline void cpufreq_update_this_cpu(struct rq *rq, unsigned int flags) {}
 #else /* arch_scale_freq_capacity */
 #define arch_scale_freq_invariant()	(false)
 #endif
+
+static inline bool softirq_pending(int cpu)
+{
+	return false;
+}
