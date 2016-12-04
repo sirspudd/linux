@@ -3,10 +3,17 @@
 #include <linux/interrupt.h>
 #include <linux/skip_list.h>
 #include <linux/stop_machine.h>
+#include <linux/u64_stats_sync.h>
 #include "cpuacct.h"
 
 #ifndef MUQSS_SCHED_H
 #define MUQSS_SCHED_H
+
+#ifdef CONFIG_SCHED_DEBUG
+#define SCHED_WARN_ON(x)	WARN_ONCE(x, #x)
+#else
+#define SCHED_WARN_ON(x)	((void)(x))
+#endif
 
 /* task_struct::on_rq states: */
 #define TASK_ON_RQ_QUEUED	1
@@ -197,6 +204,8 @@ extern struct static_key_false sched_schedstats;
 	rcu_dereference_check((p), \
 			      lockdep_is_held(&sched_domains_mutex))
 
+#define for_each_lower_domain(sd) for (; sd; sd = sd->child)
+
 /*
  * The domain tree (rq->sd) is protected by RCU's quiescent state transition.
  * See detach_destroy_domains: synchronize_sched for details.
@@ -235,7 +244,7 @@ static inline void idle_set_state(struct rq *rq,
 
 static inline struct cpuidle_state *idle_get_state(struct rq *rq)
 {
-	WARN_ON(!rcu_read_lock_held());
+	SCHED_WARN_ON(!rcu_read_lock_held());
 	return rq->idle_state;
 }
 #else
@@ -251,52 +260,28 @@ static inline struct cpuidle_state *idle_get_state(struct rq *rq)
 #endif
 
 #ifdef CONFIG_IRQ_TIME_ACCOUNTING
+struct irqtime {
+	u64			hardirq_time;
+	u64			softirq_time;
+	u64			irq_start_time;
+	struct u64_stats_sync	sync;
+};
 
-DECLARE_PER_CPU(u64, cpu_hardirq_time);
-DECLARE_PER_CPU(u64, cpu_softirq_time);
-
-#ifndef CONFIG_64BIT
-DECLARE_PER_CPU(seqcount_t, irq_time_seq);
-
-static inline void irq_time_write_begin(void)
-{
-	__this_cpu_inc(irq_time_seq.sequence);
-	smp_wmb();
-}
-
-static inline void irq_time_write_end(void)
-{
-	smp_wmb();
-	__this_cpu_inc(irq_time_seq.sequence);
-}
+DECLARE_PER_CPU(struct irqtime, cpu_irqtime);
 
 static inline u64 irq_time_read(int cpu)
 {
-	u64 irq_time;
-	unsigned seq;
+	struct irqtime *irqtime = &per_cpu(cpu_irqtime, cpu);
+	unsigned int seq;
+	u64 total;
 
 	do {
-		seq = read_seqcount_begin(&per_cpu(irq_time_seq, cpu));
-		irq_time = per_cpu(cpu_softirq_time, cpu) +
-			   per_cpu(cpu_hardirq_time, cpu);
-	} while (read_seqcount_retry(&per_cpu(irq_time_seq, cpu), seq));
+		seq = __u64_stats_fetch_begin(&irqtime->sync);
+		total = irqtime->softirq_time + irqtime->hardirq_time;
+	} while (__u64_stats_fetch_retry(&irqtime->sync, seq));
 
-	return irq_time;
+	return total;
 }
-#else /* CONFIG_64BIT */
-static inline void irq_time_write_begin(void)
-{
-}
-
-static inline void irq_time_write_end(void)
-{
-}
-
-static inline u64 irq_time_read(int cpu)
-{
-	return per_cpu(cpu_softirq_time, cpu) + per_cpu(cpu_hardirq_time, cpu);
-}
-#endif /* CONFIG_64BIT */
 #endif /* CONFIG_IRQ_TIME_ACCOUNTING */
 
 #ifdef CONFIG_CPU_FREQ
