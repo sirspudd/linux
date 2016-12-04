@@ -340,4 +340,27 @@ static inline bool softirq_pending(int cpu)
 	return true;
 }
 
+#ifdef CONFIG_64BIT
+static inline u64 read_sum_exec_runtime(struct task_struct *t)
+{
+	return tsk_seruntime(t);
+}
+#else
+struct rq *task_rq_lock(struct task_struct *p, unsigned long *flags);
+void task_rq_unlock(struct rq *rq, struct task_struct *p, unsigned long *flags);
+
+static inline u64 read_sum_exec_runtime(struct task_struct *t)
+{
+	unsigned long flags;
+	u64 ns;
+	struct rq *rq;
+
+	rq = task_rq_lock(t, &flags);
+	ns = tsk_seruntime(t);
+	task_rq_unlock(rq, t, &flags);
+
+	return ns;
+}
+#endif
+
 #endif /* MUQSS_SCHED_H */

@@ -533,8 +533,7 @@ static inline void rq_unlock_irqrestore(struct rq *rq, unsigned long *flags)
 	raw_spin_unlock_irqrestore(&rq->lock, *flags);
 }
 
-static inline struct rq
-*task_rq_lock(struct task_struct *p, unsigned long *flags)
+struct rq *task_rq_lock(struct task_struct *p, unsigned long *flags)
 	__acquires(p->pi_lock)
 	__acquires(rq->lock)
 {
@@ -552,7 +551,7 @@ static inline struct rq
 	return rq;
 }
 
-static inline void task_rq_unlock(struct rq *rq, struct task_struct *p, unsigned long *flags)
+void task_rq_unlock(struct rq *rq, struct task_struct *p, unsigned long *flags)
 	__releases(rq->lock)
 	__releases(p->pi_lock)
 {

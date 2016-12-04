@@ -1820,3 +1820,23 @@ static inline bool softirq_pending(int cpu)
 {
 	return false;
 }
+
+#ifdef CONFIG_64BIT
+static inline u64 read_sum_exec_runtime(struct task_struct *t)
+{
+	return t->se.sum_exec_runtime;
+}
+#else
+static inline u64 read_sum_exec_runtime(struct task_struct *t)
+{
+	u64 ns;
+	struct rq_flags rf;
+	struct rq *rq;
+
+	rq = task_rq_lock(t, &rf);
+	ns = t->se.sum_exec_runtime;
+	task_rq_unlock(rq, t, &rf);
+
+	return ns;
+}
+#endif
