@@ -876,7 +876,7 @@ static inline bool rq_local(struct rq *rq);
  * Make sure a call to update_clocks has been made before calling this to get
  * an updated rq->niffies.
  */
-static void update_load_avg(struct rq *rq)
+static void update_load_avg(struct rq *rq, unsigned int flags)
 {
 	unsigned long us_interval;
 	long load, curload;
@@ -897,7 +897,7 @@ static void update_load_avg(struct rq *rq)
 
 	rq->load_update = rq->niffies;
 	if (likely(rq_local(rq)))
-		cpufreq_trigger(rq->niffies, rq->load_avg);
+		cpufreq_trigger(rq->niffies, flags);
 }
 
 /*
@@ -913,7 +913,7 @@ static void dequeue_task(struct rq *rq, struct task_struct *p, int flags)
 	update_clocks(rq);
 	if (!(flags & DEQUEUE_SAVE))
 		sched_info_dequeued(task_rq(p), p);
-	update_load_avg(rq);
+	update_load_avg(rq, flags);
 }
 
 #ifdef CONFIG_PREEMPT_RCU
@@ -949,7 +949,7 @@ static inline bool isoprio_suitable(struct rq *rq)
  */
 static void enqueue_task(struct rq *rq, struct task_struct *p, int flags)
 {
-	unsigned int randseed;
+	unsigned int randseed, cflags = 0;
 	u64 sl_id;
 
 	if (!rt_task(p)) {
@@ -972,9 +972,10 @@ static void enqueue_task(struct rq *rq, struct task_struct *p, int flags)
 	 * from priority 0 realtime in first place to the lowest priority
 	 * idleprio tasks last. Skiplist insertion is an O(log n) process.
 	 */
-	if (p->prio <= ISO_PRIO)
+	if (p->prio <= ISO_PRIO) {
 		sl_id = p->prio;
-	else {
+		cflags = SCHED_CPUFREQ_RT;
+	} else {
 		sl_id = p->deadline;
 		if (idleprio_task(p)) {
 			if (p->prio == IDLE_PRIO)
@@ -993,7 +994,9 @@ static void enqueue_task(struct rq *rq, struct task_struct *p, int flags)
 	randseed = (rq->niffies >> 10) & 0xFFFFFFFF;
 	skiplist_insert(rq->sl, &p->node, sl_id, p, randseed);
 	rq->best_key = rq->node.next[0]->key;
-	update_load_avg(rq);
+	if (p->in_iowait)
+		cflags |= SCHED_CPUFREQ_IOWAIT;
+	update_load_avg(rq, cflags);
 }
 
 /*
@@ -3340,7 +3343,7 @@ void scheduler_tick(void)
 
 	sched_clock_tick();
 	update_clocks(rq);
-	update_load_avg(rq);
+	update_load_avg(rq, 0);
 	update_cpu_clock_tick(rq, rq->curr);
 	if (!rq_idle(rq))
 		task_running_tick(rq);
@@ -3839,7 +3842,7 @@ static void __sched notrace __schedule(bool preempt)
 		clear_cpuidle_map(cpu);
 	else {
 		set_cpuidle_map(cpu);
-		update_load_avg(rq);
+		update_load_avg(rq, 0);
 	}
 
 	set_rq_task(rq, next);

@@ -287,18 +287,15 @@ static inline u64 irq_time_read(int cpu)
 #ifdef CONFIG_CPU_FREQ
 DECLARE_PER_CPU(struct update_util_data *, cpufreq_update_util_data);
 
-static inline void cpufreq_trigger(u64 time, unsigned long util)
+static inline void cpufreq_trigger(u64 time, unsigned int flags)
 {
-       struct update_util_data *data;
+       struct update_util_data *data = rcu_dereference_sched(*this_cpu_ptr(&cpufreq_update_util_data));
 
-       if (util > SCHED_CAPACITY_SCALE)
-	       util = SCHED_CAPACITY_SCALE;
-       data = rcu_dereference_sched(*this_cpu_ptr(&cpufreq_update_util_data));
        if (data)
-               data->func(data, time, util, SCHED_CAPACITY_SCALE);
+               data->func(data, time, flags);
 }
 #else
-static inline void cpufreq_trigger(u64 time, unsigned long util)
+static inline void cpufreq_trigger(u64 time, unsigned int flag)
 {
 }
 #endif /* CONFIG_CPU_FREQ */
