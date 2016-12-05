@@ -5697,9 +5697,35 @@ void wake_up_idle_cpu(int cpu)
 		trace_sched_wake_idle_without_ipi(cpu);
 }
 
+static bool wake_up_full_nohz_cpu(int cpu)
+{
+	/*
+	 * We just need the target to call irq_exit() and re-evaluate
+	 * the next tick. The nohz full kick at least implies that.
+	 * If needed we can still optimize that later with an
+	 * empty IRQ.
+	 */
+	if (cpu_is_offline(cpu))
+		return true;  /* Don't try to wake offline CPUs. */
+	if (tick_nohz_full_cpu(cpu)) {
+		if (cpu != smp_processor_id() ||
+		    tick_nohz_tick_stopped())
+			tick_nohz_full_kick_cpu(cpu);
+		return true;
+	}
+
+	return false;
+}
+
+/*
+ * Wake up the specified CPU.  If the CPU is going offline, it is the
+ * caller's responsibility to deal with the lost wakeup, for example,
+ * by hooking into the CPU_DEAD notifier like timers and hrtimers do.
+ */
 void wake_up_nohz_cpu(int cpu)
 {
-	wake_up_idle_cpu(cpu);
+	if (!wake_up_full_nohz_cpu(cpu))
+		wake_up_idle_cpu(cpu);
 }
 #endif /* CONFIG_NO_HZ_COMMON */
 
@@ -7381,22 +7407,6 @@ int sched_cpu_dying(unsigned int cpu)
 }
 #endif
 
-#ifdef CONFIG_SCHED_SMT
-DEFINE_STATIC_KEY_FALSE(sched_smt_present);
-
-static void sched_init_smt(void)
-{
-	/*
-	 * We've enumerated all CPUs and will assume that if any CPU
-	 * has SMT siblings, CPU0 will too.
-	 */
-	if (cpumask_weight(cpu_smt_mask(0)) > 1)
-		static_branch_enable(&sched_smt_present);
-}
-#else
-static inline void sched_init_smt(void) { }
-#endif
-
 #if defined(CONFIG_SCHED_SMT) || defined(CONFIG_SCHED_MC)
 /*
  * Cheaper version of the below functions in case support for SMT and MC is
@@ -7556,8 +7566,6 @@ void __init sched_init_smp(void)
 			printk(KERN_DEBUG "MuQSS locality CPU %d to %d: %d\n", cpu, other_cpu, rq->cpu_locality[other_cpu]);
 		}
 	}
-
-	sched_init_smt();
 
 	sched_smp_initialized = true;
 }
