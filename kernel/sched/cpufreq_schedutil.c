@@ -155,7 +155,9 @@ static void sugov_get_util(unsigned long *util, unsigned long *max)
 {
 	struct rq *rq = this_rq();
 
-	*util = min(rq->load_avg, SCHED_CAPACITY_SCALE);
+	*util = rq->load_avg;
+	if (*util > SCHED_CAPACITY_SCALE)
+		*util = SCHED_CAPACITY_SCALE;
 	*max = SCHED_CAPACITY_SCALE;
 }
 #else /* CONFIG_SCHED_MUQSS */
