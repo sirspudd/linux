@@ -1,7 +1,7 @@
 VERSION = 4
 PATCHLEVEL = 9
 SUBLEVEL = 0
-EXTRAVERSION = -rc8-bfq
+EXTRAVERSION = -rc8
 NAME = Psychotic Stoned Sheep
 
 # *DOCUMENTATION*
