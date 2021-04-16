@@ -414,6 +414,7 @@ config SND_SOC_AC97_CODEC
 	tristate "Build generic ASoC AC97 CODEC driver"
 	select SND_AC97_CODEC
 	select SND_SOC_AC97_BUS
+	select SND_SOC_GENERIC_DMAENGINE_PCM
 
 config SND_SOC_AD1836
 	tristate
