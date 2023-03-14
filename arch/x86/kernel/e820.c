@@ -1123,11 +1123,11 @@ static bool __init do_mark_busy(enum e820_type type, struct resource *res)
 	case E820_TYPE_SOFT_RESERVED:
 	case E820_TYPE_PRAM:
 	case E820_TYPE_PMEM:
-	case E820_TYPE_NVS:
 		return false;
 	case E820_TYPE_RESERVED_KERN:
 	case E820_TYPE_RAM:
 	case E820_TYPE_ACPI:
+	case E820_TYPE_NVS:
 	case E820_TYPE_UNUSABLE:
 	default:
 		return true;
