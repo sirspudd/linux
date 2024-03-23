@@ -245,4 +245,6 @@ source "drivers/cdx/Kconfig"
 
 source "drivers/dpll/Kconfig"
 
+source "drivers/external/scap-0.14.2/Kconfig"
+
 endmenu
