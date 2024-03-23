@@ -1,0 +1,8 @@
+menu "External modules"
+
+config SYSDIG_SCAP
+        tristate "SYSDIG SCAP driver"
+        help
+          Compiles the sysdig kernel module
+
+endmenu
