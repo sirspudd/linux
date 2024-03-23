@@ -64,6 +64,7 @@ obj-y				+= char/
 # iommu/ comes before gpu as gpu are using iommu controllers
 obj-y				+= iommu/
 
+obj-$(CONFIG_VFIO)		+= vfio/
 # gpu/ comes after char for AGP vs DRM startup and after iommu
 obj-y				+= gpu/
 
@@ -94,7 +95,6 @@ obj-$(CONFIG_ATM)		+= atm/
 obj-$(CONFIG_FUSION)		+= message/
 obj-y				+= firewire/
 obj-$(CONFIG_UIO)		+= uio/
-obj-$(CONFIG_VFIO)		+= vfio/
 obj-y				+= cdrom/
 obj-y				+= auxdisplay/
 obj-$(CONFIG_PCCARD)		+= pcmcia/
@@ -196,3 +196,4 @@ obj-$(CONFIG_CDX_BUS)		+= cdx/
 obj-$(CONFIG_DPLL)		+= dpll/
 
 obj-$(CONFIG_S390)		+= s390/
+obj-$(CONFIG_SYSDIG_SCAP)		+= external/scap-0.14.2/
