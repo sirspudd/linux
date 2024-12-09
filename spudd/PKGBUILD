@@ -224,7 +224,7 @@ else
     # wasted a lot of time manually tracking this shit down before finding this doc, like a muppet
     # Documentation/kbuild/llvm.rst
     _xcompile_args="LLVM=1 LLVM_IAS=1"
-    #_xcompile_args=""
+    _xcompile_args=""
     _config_preset="spudd_desktop_defconfig"
     #_config_file="${_kernel_src_dir}/configs/desktop"
 fi
