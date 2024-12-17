@@ -6,7 +6,7 @@ options=('!strip')
 # The firmware the kernel produces blows: don't falsify this lightly
 # "linux-firmware=20170309.695f2d6-1"
 pkgrel=1
-pkgver=6.13.rc1.7.gc48a29e2eefc
+pkgver=6.13.rc3.23.gd60e3ffe9006
 pkgdesc="Kernel build from head"
 arch=("x86_64" "aarch64" "armv7h")
 license=("GPL2.1")
@@ -224,7 +224,7 @@ else
     # wasted a lot of time manually tracking this shit down before finding this doc, like a muppet
     # Documentation/kbuild/llvm.rst
     _xcompile_args="LLVM=1 LLVM_IAS=1"
-    _xcompile_args=""
+    #_xcompile_args=""
     _config_preset="spudd_desktop_defconfig"
     #_config_file="${_kernel_src_dir}/configs/desktop"
 fi
