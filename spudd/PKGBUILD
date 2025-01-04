@@ -6,7 +6,7 @@ options=('!strip')
 # The firmware the kernel produces blows: don't falsify this lightly
 # "linux-firmware=20170309.695f2d6-1"
 pkgrel=1
-pkgver=6.14.rc3.71.gabf852140a65
+pkgver=6.13.rc6.59.ga472bb82f62b
 pkgdesc="Kernel build from head"
 arch=("x86_64" "aarch64" "armv7h")
 license=("GPL2.1")
@@ -27,14 +27,14 @@ pkgbase() {
 }
 pkgbase
 
-if [ -z "${_pi_ver}" ]; then
-    install=spudd.install
-fi
-
-prepare() {
-    cp ${startdir}/_spudd.install ${startdir}/spudd.install
-    sed -i "s/spudd/${postfix}/g" ${startdir}/spudd.install
-}
+#if [ -z "${_pi_ver}" ]; then
+#    install=spudd.install
+#fi
+#
+#prepare() {
+#    cp ${startdir}/_spudd.install ${startdir}/spudd.install
+#    sed -i "s/spudd/${postfix}/g" ${startdir}/spudd.install
+#}
 
 pkgver() {
   cd $_kernel_src_dir
@@ -156,7 +156,6 @@ for _p in "${pkgname[@]}"; do
 done
 
 _package() {
-  prepare
   boot_dir="${pkgdir}/boot"
   dtb_dir="${boot_dir}/dtbs"
   usr_dir="${pkgdir}/usr"
