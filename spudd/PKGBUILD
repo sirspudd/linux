@@ -1,0 +1,236 @@
+# Maintainer: Donald Carr <sirspudd at gmail dot com>
+
+#set -x
+
+options=('!strip')
+# The firmware the kernel produces blows: don't falsify this lightly
+# "linux-firmware=20170309.695f2d6-1"
+pkgrel=1
+pkgver=6.15.rc3.126.g4ad4e3dde401
+pkgdesc="Kernel build from head"
+arch=("x86_64" "aarch64" "armv7h")
+license=("GPL2.1")
+log_path="${PWD}/$(date +"%Y-%m-%d-%H%M").log"
+_kernel_src_dir=${startdir}/../
+_config_preset=""
+_pi_ver="${LOCAL_PI_VER:-}"
+
+pkgbase() {
+    oldpath=${PWD}
+    cd $_kernel_src_dir
+    postfix="spudd-$(git branch --show-current)"
+    if [[ -f testing ]]; then
+        postfix=${postfix}-testing
+    fi
+    pkgbase=linux-${postfix}
+    cd ${oldpath}
+}
+pkgbase
+
+#if [ -z "${_pi_ver}" ]; then
+#    install=spudd.install
+#fi
+#
+#prepare() {
+#    cp ${startdir}/_spudd.install ${startdir}/spudd.install
+#    sed -i "s/spudd/${postfix}/g" ${startdir}/spudd.install
+#}
+
+pkgver() {
+  cd $_kernel_src_dir
+  git describe --tags | sed -e "s/^v//" | tr '-' '.'
+}
+
+build() {
+  set -o nounset
+  set -o pipefail
+  set -o errexit
+  #set -o xtrace
+
+  #export KCFLAGS=' -march=x86-64-v3'
+  #export KCPPFLAGS=' -march=x86-64-v3'
+
+  cd $_kernel_src_dir
+
+  if [[ -n ${_config_preset} ]]; then
+    echo ${_make_cmd} ${_config_preset}
+    ${_make_cmd} ${_config_preset}
+  elif [[ -n ${_config_file} ]]; then
+    cp ${_config_file} ${_kernel_src_dir}/.config
+  else
+    echo "Kernel not configured; bailing"
+    exit 1
+  fi
+
+  ${_make_cmd} all 2>&1 | tee ${log_path}
+
+  if [ -n "${_pi_ver}" ]; then
+    ${_make_cmd} dtbs 2>&1 | tee -a ${log_path}
+  fi
+
+  set +o nounset
+  set +o pipefail
+  set +o errexit
+}
+
+_package-headers() {
+    pkgdesc="Headers and scripts for building modules for the $pkgdesc kernel"
+    version=$(cat ${_build_path}/include/config/kernel.release)
+
+    cd $_kernel_src_dir
+    local builddir="$pkgdir/usr/lib/modules/${version}/build"
+
+    echo "Installing build files..."
+    install -Dt "$builddir" -m644 .config Makefile Module.symvers System.map \
+        vmlinux
+    install -Dt "$builddir/kernel" -m644 kernel/Makefile
+    install -Dt "$builddir/arch/x86" -m644 arch/x86/Makefile
+    cp -t "$builddir" -a scripts
+
+    # add objtool for external module building and enabled VALIDATION_STACK option
+    install -Dt "$builddir/tools/objtool" tools/objtool/objtool
+
+    # add xfs and shmem for aufs building
+    mkdir -p "$builddir"/{fs/xfs,mm}
+
+    echo "Installing headers..."
+    cp -t "$builddir" -a include
+    cp -t "$builddir/arch/x86" -a arch/x86/include
+    install -Dt "$builddir/arch/x86/kernel" -m644 arch/x86/kernel/asm-offsets.s
+
+    install -Dt "$builddir/drivers/md" -m644 drivers/md/*.h
+    install -Dt "$builddir/net/mac80211" -m644 net/mac80211/*.h
+
+    # http://bugs.archlinux.org/task/13146
+    install -Dt "$builddir/drivers/media/i2c" -m644 drivers/media/i2c/msp3400-driver.h
+
+    # http://bugs.archlinux.org/task/20402
+    install -Dt "$builddir/drivers/media/usb/dvb-usb" -m644 drivers/media/usb/dvb-usb/*.h
+    install -Dt "$builddir/drivers/media/dvb-frontends" -m644 drivers/media/dvb-frontends/*.h
+    install -Dt "$builddir/drivers/media/tuners" -m644 drivers/media/tuners/*.h
+
+    echo "Installing KConfig files..."
+    find . -name 'Kconfig*' -exec install -Dm644 {} "$builddir/{}" \;
+
+    echo "Removing unneeded architectures..."
+    local arch
+    for arch in "$builddir"/arch/*/; do
+        [[ $arch = */x86/ ]] && continue
+        echo "Removing $(basename "$arch")"
+        rm -r "$arch"
+    done
+
+    echo "Removing documentation..."
+    rm -r "$builddir/Documentation"
+
+    echo "Removing broken symlinks..."
+    find -L "$builddir" -type l -printf 'Removing %P\n' -delete
+
+    echo "Removing loose objects..."
+    find "$builddir" -type f -name '*.o' -printf 'Removing %P\n' -delete
+
+    echo "Stripping build tools..."
+    local file
+    while read -rd '' file; do
+        case "$(file -bi "$file")" in
+            application/x-sharedlib\;*)      # Libraries (.so)
+                strip -v $STRIP_SHARED "$file" ;;
+            application/x-archive\;*)        # Libraries (.a)
+                strip -v $STRIP_STATIC "$file" ;;
+            application/x-executable\;*)     # Binaries
+                strip -v $STRIP_BINARIES "$file" ;;
+            application/x-pie-executable\;*) # Relocatable binaries
+                strip -v $STRIP_SHARED "$file" ;;
+        esac
+    done < <(find "$builddir" -type f -perm -u+x ! -name vmlinux -print0)
+
+    echo "Adding symlink..."
+    mkdir -p "$pkgdir/usr/src"
+    ln -sr "$builddir" "$pkgdir/usr/src/$pkgbase"
+}
+
+pkgname=("$pkgbase")
+#pkgname=("$pkgbase" "$pkgbase-headers")
+for _p in "${pkgname[@]}"; do
+  eval "package_$_p() {
+    $(declare -f "_package${_p#$pkgbase}")
+    _package${_p#$pkgbase}
+  }"
+done
+
+_package() {
+  boot_dir="${pkgdir}/boot"
+  dtb_dir="${boot_dir}/dtbs"
+  usr_dir="${pkgdir}/usr"
+  usr_lib_dir="${usr_dir}/lib"
+  version=$(cat ${_build_path}/include/config/kernel.release)
+  modules_dir="${usr_lib_dir}/modules/${version}"
+  firmware_dir="${usr_lib_dir}/firmware"
+  preset_dir=${pkgdir}/etc/mkinitcpio.d
+
+  cd $_kernel_src_dir
+  INSTALL_MOD_PATH=${usr_dir} INSTALL_MOD_STRIP=1 ${_make_cmd} modules_install
+  if [ -n "${_pi_ver}" ]; then
+    INSTALL_DTBS_PATH=${dtb_dir} ${_make_cmd} dtbs_install
+  fi
+
+  mkdir -p ${boot_dir} ${modules_dir}
+  touch ${modules_dir}/.force-existence
+  if [ "${_pi_ver}" = "3" ] || [ "${_pi_ver}" = "4" ]; then
+    cp ${_build_path}/arch/arm64/boot/Image ${boot_dir}/Image
+    cp ${_build_path}/arch/arm64/boot/Image.gz ${boot_dir}/Image.gz
+  elif [ "${_pi_ver}" = "2" ]; then
+    cp ${_build_path}/arch/arm/boot/zImage ${boot_dir}/vmlinuz-${postfix}
+  else
+    cp ${_build_path}/arch/x86/boot/bzImage ${boot_dir}/vmlinuz-${postfix}
+    cp ${_build_path}/arch/x86/boot/bzImage ${modules_dir}/vmlinuz
+  fi
+
+  mkdir -p ${preset_dir}
+  cp ${startdir}/spudd.preset ${preset_dir}/${postfix}.preset
+  sed -i "s/spudd/${postfix}/g" ${preset_dir}/${postfix}.preset
+
+  #rm -Rf ${startdir}/firmware
+  #if [[ -d ${firmware_dir} ]]; then
+  #  mv ${firmware_dir} ${startdir}
+  #fi
+}
+
+if [ -n "${_pi_ver}" ]; then
+    case ${_pi_ver} in
+    2)
+        echo "Compiling for the RPi 2 aarch32"
+        _config_file="${startdir}/rpi2"
+        _xcompile_args="ARCH=arm CROSS_COMPILE=/opt/armv7-rpi2-linux-gnueabihf/bin/armv7-rpi2-linux-gnueabihf-"
+    ;;
+    3)
+        #symbols omitted by default wtf!
+        #DTC_FLAGS=\"-@ -H epapr\"
+        echo "Compiling for the RPi 3 aarch64"
+        _config_file="${startdir}/rpi3"
+        _xcompile_args="ARCH=arm64 CROSS_COMPILE=/opt/x-tools/aarch64-rpi3-linux-gnu/bin/aarch64-rpi3-linux-gnu-"
+    ;;
+   4)
+        #symbols omitted by default wtf!
+        #DTC_FLAGS=\"-@ -H epapr\"
+        echo "Compiling for the RPi 4 aarch64"
+        _config_preset="bcm2711_defconfig"
+        _xcompile_args="ARCH=arm64 CROSS_COMPILE=${HOME}/x-tools/aarch64-spudd-linux-gnu/bin/aarch64-spudd-linux-gnu-"
+    ;;
+    *)
+        echo "Only supports the rpi 4 at this point in time"
+        exit 1
+    ;;
+    esac
+else
+    echo "Compiling for desktop"
+    # wasted a lot of time manually tracking this shit down before finding this doc, like a muppet
+    # Documentation/kbuild/llvm.rst
+    _xcompile_args="LLVM=1 LLVM_IAS=1 feature-clang-bpf-co-re=1"
+    #_xcompile_args=""
+    _config_preset="spudd_desktop_defconfig"
+    #_config_file="${_kernel_src_dir}/configs/desktop"
+fi
+
+_build_path="${BUILDDIR}/${pkgbase}/build"
+_make_cmd="eval time make O=${_build_path} V=0 ${_xcompile_args}"
