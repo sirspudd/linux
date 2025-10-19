@@ -1,0 +1,37 @@
+generate_initramfs() {
+    mkinitcpio -p spudd-master
+}
+
+## arg 1:  the new package version
+pre_install() {
+    echo ""
+}
+
+## arg 1:  the new package version
+post_install() {
+    generate_initramfs
+}
+#post_install
+
+## arg 1:  the new package version
+## arg 2:  the old package version
+pre_upgrade() {
+    echo ""
+}
+
+## arg 1:  the new package version
+## arg 2:  the old package version
+post_upgrade() {
+    generate_initramfs
+}
+
+## arg 1:  the old package version
+pre_remove() {
+    echo ""
+}
+#pre_remove
+
+## arg 1:  the old package version
+post_remove() {
+    rm /boot/initramfs-spudd-master.img
+}
