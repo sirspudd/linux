@@ -6,7 +6,7 @@ options=('!strip')
 # The firmware the kernel produces blows: don't falsify this lightly
 # "linux-firmware=20170309.695f2d6-1"
 pkgrel=1
-pkgver=6.15.rc3.126.g4ad4e3dde401
+pkgver=7.2.rc1.242.g53d36e58f279
 pkgdesc="Kernel build from head"
 arch=("x86_64" "aarch64" "armv7h")
 license=("GPL2.1")
